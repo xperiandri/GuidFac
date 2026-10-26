@@ -5,14 +5,14 @@
 * GuidFac (`GuidFac64` in the manifest) – a Visual Studio extension (VSIX) that inserts a new GUID into the active text editor in the format you choose. The command is Edit > InsertGuid, bound to Ctrl+E, Ctrl+G; it shows a small dialog at the caret with the GUID as `D`, `N`, single-byte array and multi-byte formats in lower case, upper case or both, and Enter inserts the selected line. The history is in #file:'Source/GuidFac/ReleaseNotes.txt'; #file:'README.md' only lists build prerequisites and is out of date (it names Visual Studio 2013)
 * Installs into Visual Studio 2022 and later (`[17.0,)`, `amd64`; see #file:'Source/GuidFac/source.extension.vsixmanifest'); .NET Framework 4.7.2; `LangVersion` is 10.0 (set in the project file). The manifest still declares dependencies of older Visual Studio versions (`Microsoft.Framework.NDP` 4.5, `Microsoft.VisualStudio.MPF.12.0` and a core editor prerequisite from 15.0), and `app.config` (binding redirects for `Microsoft.VisualStudio.Threading` and `Newtonsoft.Json`) is only a `None` item of the project
 * Versions disagree: the manifest and `ReleaseNotes.txt` say 2.1.0, `Properties/AssemblyInfo.cs` still says 1.3.0, and Help > About shows `1.0` (the argument of `InstalledProductRegistration`). A release bump changes the manifest and adds an entry to `ReleaseNotes.txt`
-* The solution is #file:'Solutions/GuidFac/GuidFac.sln'. It has one old-style (non-SDK) project, #file:'Source/GuidFac/GuidFac.csproj': every `.cs`, XAML page, resource and content file is listed in it by hand (`Compile`, `Page`, `EmbeddedResource`, `Content`, `VSCTCompile`), so a new file is neither compiled nor packaged until it is added there. Package versions are `PackageReference` items in the same file – there is no central package management
+* The solution is #file:'GuidFac.sln', in the repository root on purpose: Visual Studio reads `.mcp.json` from the folder of the solution (see "MCP Servers"). It has one old-style (non-SDK) project, #file:'Source/GuidFac/GuidFac.csproj': every `.cs`, XAML page, resource and content file is listed in it by hand (`Compile`, `Page`, `EmbeddedResource`, `Content`, `VSCTCompile`), so a new file is neither compiled nor packaged until it is added there. Package versions are `PackageReference` items in the same file – there is no central package management
 * Windows only: building needs **Visual Studio 2022** with the "Visual Studio extension development" workload. Visual Studio 2026 does not build this project: its private assemblies are version 18.0.0.0 while the public SDK packages stay at 17.0.0.0, and the compile stops with `CS1705` (see "Private Visual Studio Assemblies"). `dotnet build` does not build VSIX projects
 * The assembly is signed with the key file in the `DEVSNK` environment variable (`SignAssembly` is on in the project file). Point `DEVSNK` to any `.snk` file, or pass `-p:SignAssembly=false` as the command below does
 * Build from the repository root in PowerShell. `msbuild` is usually not on `PATH`, so find the one of Visual Studio 2022 with `vswhere`; `DeployExtension=false` keeps the build from installing the extension into the Experimental instance:
 
   ```powershell
   $msbuild = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -version '[17.0,18.0)' -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1
-  & $msbuild Solutions\GuidFac\GuidFac.sln -restore -p:Configuration=Debug -p:DeployExtension=false -p:SignAssembly=false -v:m
+  & $msbuild GuidFac.sln -restore -p:Configuration=Debug -p:DeployExtension=false -p:SignAssembly=false -v:m
   ```
 
 * Test: there is no test project. Run the extension in the Visual Studio Experimental instance (F5 starts `devenv.exe /rootsuffix Exp`, see the start options of the project), open a code file, put the caret in it and press Ctrl+E, Ctrl+G. Try an editor in the main window and in an undocked window, and, when SQL Server Data Tools is installed, a SQL editor: the window lookup was changed for the SQL editor (see "Private Visual Studio Assemblies")
@@ -26,7 +26,7 @@
 /
 ├── .claude/                                  – Claude Code settings (the vs-agent-plugins plugin) and helper scripts; `skills` is a local, git-ignored link to `.github/skills`
 ├── .github/                                  – these instructions, the `vs-extension-expert` agent, skills, prompts and workflows
-├── Solutions/GuidFac/GuidFac.sln             – the solution
+├── GuidFac.sln                               – the solution; it lives in the repository root so that Visual Studio finds `.mcp.json`
 ├── Source/GuidFac/                           – the extension, a single old-style project
 │   ├── GuidFacPackage.cs                     – the `AsyncPackage`: reads the settings, registers the command and shows the dialog
 │   ├── GuidFacWindow.xaml / .xaml.cs         – the dialog (a `DialogWindow`): the list of formats, the case switches and the keyboard handling
@@ -100,7 +100,7 @@ Agents discover servers from #file:'.mcp.json'; these are only hints on when to 
 
 * Use the `GitHub` server for code search in dependency repositories. In Claude Code it authenticates through `.claude/scripts/github-mcp-headers.ps1`, which reuses the GitHub token stored by Git Credential Manager, because the server does not support the OAuth dynamic client registration Claude Code needs.
 * Use the `Microsoft Learn` server for official Microsoft documentation, the Visual Studio extensibility documentation included. Visual Studio bundles this server itself, so `.mcp.json` lists it for Claude Code only.
-* Visual Studio reads `.mcp.json` from the folder of the solution, and the solution of this repository is in `Solutions/GuidFac`, so Visual Studio does not look for the `.mcp.json` in the repository root; Claude Code reads it from there.
+* Visual Studio reads `.mcp.json` from the folder of the solution, and Claude Code reads it from the root of the repository. The solution is in the repository root so that one file serves both; keep it there.
 * When the solution is open in Visual Studio and an MCP server that exposes the IDE (`vs`) is connected, prefer its tools to the shell: build with it instead of resolving MSBuild, read the diagnostics from it instead of parsing the build output, and navigate with its symbol tools instead of text search.
 * When adding or changing a server, keep `servers` (Visual Studio / VS Code / GitHub Copilot) and `mcpServers` (Claude Code) in sync and sorted alphabetically by key, except for the servers that Visual Studio already bundles (Microsoft Learn, NuGet): those go only in `mcpServers`.
 
