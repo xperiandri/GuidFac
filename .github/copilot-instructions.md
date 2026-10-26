@@ -5,7 +5,7 @@
 * GuidFac (`GuidFac64` in the manifest) – a Visual Studio extension (VSIX) that inserts a new GUID into the active text editor in the format you choose. The command is Edit > InsertGuid, bound to Ctrl+E, Ctrl+G; it shows a small dialog at the caret with the GUID as `D`, `N`, single-byte array and multi-byte formats in lower case, upper case or both, and Enter inserts the selected line. The history is in #file:'Source/GuidFac/ReleaseNotes.txt'; #file:'README.md' only lists build prerequisites and is out of date (it names Visual Studio 2013)
 * Installs into Visual Studio 2022 and later (`[17.0,)`, `amd64`; see #file:'Source/GuidFac/source.extension.vsixmanifest'); .NET Framework 4.7.2; `LangVersion` is 10.0 (set in the project file). The manifest still declares dependencies of older Visual Studio versions (`Microsoft.Framework.NDP` 4.5, `Microsoft.VisualStudio.MPF.12.0` and a core editor prerequisite from 15.0), and `app.config` (binding redirects for `Microsoft.VisualStudio.Threading` and `Newtonsoft.Json`) is only a `None` item of the project
 * Versions disagree: the manifest and `ReleaseNotes.txt` say 2.1.0, `Properties/AssemblyInfo.cs` still says 1.3.0, and Help > About shows `1.0` (the argument of `InstalledProductRegistration`). A release bump changes the manifest and adds an entry to `ReleaseNotes.txt`
-* The solution is #file:'GuidFac.slnx', in the repository root on purpose: Visual Studio reads `.mcp.json` from the folder of the solution (see "MCP Servers"). It uses the XML `.slnx` format. It needs the .NET SDK 9.0.200 or later, or the MSBuild of Visual Studio or Build Tools 17.13 or later (`dotnet sln` edits it). It has one old-style (non-SDK) project, #file:'Source/GuidFac/GuidFac.csproj': every `.cs`, XAML page, resource and content file is listed in it by hand (`Compile`, `Page`, `EmbeddedResource`, `Content`, `VSCTCompile`), so a new file is neither compiled nor packaged until it is added there. Package versions are `PackageReference` items in the same file – there is no central package management
+* The solution is #file:'GuidFac.slnx', in the repository root on purpose: Visual Studio reads `.mcp.json` from the folder of the solution (see "MCP Servers"). It uses the XML `.slnx` format. It needs the .NET SDK 9.0.200 or later, or the MSBuild of Visual Studio or Build Tools 17.13 or later (`dotnet sln` edits it). It has one SDK-style project, #file:'Source/GuidFac/GuidFac.csproj' (`Microsoft.NET.Sdk`, `net472`, `UseWPF`; `VSSDKBuildToolsAutoSetup` makes it a VSIX project): `.cs`, XAML and `.resx` files are included by globs, so a new file of those kinds needs no entry, while the files that go into the VSIX are `Content` items of the project. Package versions are `PackageReference` items in the same file – there is no central package management
 * Windows only: building needs **Visual Studio 2022** with the "Visual Studio extension development" workload. Visual Studio 2026 does not build this project: its private assemblies are version 18.0.0.0 while the public SDK packages stay at 17.0.0.0, and the compile stops with `CS1705` (see "Private Visual Studio Assemblies"). `dotnet build` does not build VSIX projects
 * The assembly is signed with the key file in the `DEVSNK` environment variable (`SignAssembly` is on in the project file). Point `DEVSNK` to any `.snk` file, or pass `-p:SignAssembly=false` as the command below does
 * Build from the repository root in PowerShell. `msbuild` is usually not on `PATH`, so find the one of Visual Studio 2022 with `vswhere`; `DeployExtension=false` keeps the build from installing the extension into the Experimental instance:
@@ -15,19 +15,19 @@
   & $msbuild GuidFac.slnx -restore -p:Configuration=Debug -p:DeployExtension=false -p:SignAssembly=false -v:m
   ```
 
-* Test: there is no test project. Run the extension in the Visual Studio Experimental instance (F5 starts `devenv.exe /rootsuffix Exp`, see the start options of the project), open a code file, put the caret in it and press Ctrl+E, Ctrl+G. Try an editor in the main window and in an undocked window, and, when SQL Server Data Tools is installed, a SQL editor: the window lookup was changed for the SQL editor (see "Private Visual Studio Assemblies")
+* Test: there is no test project. Run the extension in the Visual Studio Experimental instance, open a code file, put the caret in it and press Ctrl+E, Ctrl+G. Try an editor in the main window and in an undocked window, and, when SQL Server Data Tools is installed, a SQL editor: the window lookup was changed for the SQL editor (see "Private Visual Studio Assemblies"). F5 deploys the extension to the Experimental instance in Visual Studio 2026 18.5 and later, which added the SDK-style extension support (the solution marks the project with `<Deploy>`), but that Visual Studio cannot compile this project; whether F5 works from Visual Studio 2022 is untested, so if it does not, install the built `GuidFac.vsix` into the Experimental instance with `VSIXInstaller.exe /rootSuffix:Exp`
 * CI: there is no build workflow. `.github/workflows/copilot-setup-steps.yml` only restores the packages for the Copilot coding agent
 
 ## Solution Structure
 
-**IMPORTANT: Every new source file must be added to #file:'Source/GuidFac/GuidFac.csproj'**: `<Compile Include>` for code, `<Page Include>` for XAML, `<Content Include>` with `IncludeInVSIX` for files that go into the VSIX. A file that is created outside Visual Studio is not added automatically.
+**IMPORTANT: The project includes files by globs; only a few kinds of files need an entry in #file:'Source/GuidFac/GuidFac.csproj'.** `.cs`, `.xaml` and `.resx` files are included automatically; a file that goes into the VSIX needs a `<Content>` item (`VSSDKBuildToolsAutoSetup` sets `IncludeInVSIX` for all of them), and a file that is only an input of the build (`Resources\Images.png` for the command table, `Resources\Package.ico` for `VSPackage.resx`) stays a `None` item. The `Update` items in the project only add the metadata that the designers and generators of Visual Studio use.
 
 ```text
 /
 ├── .claude/                                  – Claude Code settings (the vs-agent-plugins plugin) and helper scripts; `skills` is a local, git-ignored link to `.github/skills`
 ├── .github/                                  – these instructions, the `vs-extension-expert` agent, skills, prompts and workflows
 ├── GuidFac.slnx                              – the solution; it lives in the repository root so that Visual Studio finds `.mcp.json`
-├── Source/GuidFac/                           – the extension, a single old-style project
+├── Source/GuidFac/                           – the extension, a single SDK-style project
 │   ├── GuidFacPackage.cs                     – the `AsyncPackage`: reads the settings, registers the command and shows the dialog
 │   ├── GuidFacWindow.xaml / .xaml.cs         – the dialog (a `DialogWindow`): the list of formats, the case switches and the keyboard handling
 │   ├── GuidSequncesGenerator.cs              – `GuidSequences`, the formats of a GUID (the file name has a typo)
@@ -84,7 +84,7 @@ The project file references them with a `<HintPath>` into the Visual Studio that
 ## Libraries in Use
 
 * [Visual Studio SDK](https://learn.microsoft.com/visualstudio/extensibility/) packages (`Microsoft.VisualStudio.SDK`, `Microsoft.VisualStudio.Interop`, `Microsoft.VisualStudio.Shell.15.0`) – the shell, editor and WPF dialog APIs
-* `Microsoft.VSSDK.BuildTools` – builds the VSIX (`.vsct`, `.pkgdef`, packaging)
+* `Microsoft.VSSDK.BuildTools` – builds the VSIX (`.vsct`, `.pkgdef`, packaging); the SDK-style project needs version 18.5 or later, which also keeps the copies of the assemblies that Visual Studio provides itself (`System.Text.Json`, `System.Memory` and others, which the 17.2 build tools packed) out of the VSIX
 * Windows Forms (`System.Windows.Forms.Screen`) – used by the dialog to place itself on the right monitor
 
 ## Agents and Skills
