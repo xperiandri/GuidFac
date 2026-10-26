@@ -29,6 +29,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
+      # C# 14 needs the .NET SDK 10, and windows-2022 has only 8 and 9
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v3
 
