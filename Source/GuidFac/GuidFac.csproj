@@ -2,7 +2,6 @@
 
   <PropertyGroup>
     <TargetFramework>net472</TargetFramework>
-    <LangVersion>10.0</LangVersion>
     <UseWPF>true</UseWPF>
     <RootNamespace>PrivateDeveloperInc.GuidFac</RootNamespace>
     <!-- The output stays in bin\<Configuration>\, as before, and not in bin\<Configuration>\net472\ -->
